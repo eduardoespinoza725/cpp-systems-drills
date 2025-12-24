@@ -1,68 +1,81 @@
-#include "test_unique_fd.h"
+#include <cstdio>
 #include <fcntl.h>
-#include <iostream>
+#include <stdexcept>
 #include <unistd.h>
-#include <vector>
 
-void write_record(const std::vector<char> &data) {
+#include "test_unique_fd.h"
+
+void recordHandler(char data[], const int n) {
+  // Open file with read-only mode and fail if file exists
+  int write_fd = open("/home/lalo/cpp-systems-drills/tests/start.txt", O_RDONLY);
+  assert(write_fd >= 0);
+  assert(is_valid_fd(write_fd));
+
   // Open file with write-only mode and fail if file exists
-  int fd = ::open("/dev/null", O_WRONLY);
-  assert(fd >= 0);
-  assert(is_valid_fd(fd));
+  int read_fd = open("/home/lalo/cpp-systems-drills/tests/end.txt", O_WRONLY);
+  assert(read_fd >= 0);
+  assert(is_valid_fd(read_fd));
 
-  UniqueFd f(fd);
+  UniqueFd f(write_fd);
   if (!f) {
     throw std::runtime_error("Open Failed");
   }
 
+  UniqueFd r(read_fd);
+  if (!r) {
+    throw std::runtime_error("Open Failed");
+  }
+
   auto close_file = ScopeExit{[&] { ::close(f.get()); }};
+  auto close_record = ScopeExit{[&] { ::close(r.get()); }};
 
   // rollback guard for close(fd) covers all exits
   bool wrote_ok = false;
-  auto rollback = ScopeExit{[&] {
+  auto write_rollback = ScopeExit{[&] {
     if (!wrote_ok) {
-      ::unlink("/dev/null");
+      ::unlink("/home/lalo/cpp-systems-drills/tests/start.txt");
+    }
+  }};
+
+  bool read_ok = false;
+  auto read_rollback = ScopeExit{[&] {
+    if (!read_ok) {
+      ::unlink("/home/lalo/cpp-systems-drills/tests/end.txt");
     }
   }};
 
   // write record, throw if failed
-  if (::write(f.get(), data.data(), data.size()) != data.size()) {
-    throw std::runtime_error("Write Failed");
+  int count = 0;
+  while (::read(f.get(), data, 1) != 0) {
+    // to write the 1st byte of the input file in the output file
+    bool isFirstByte = count < n;
+    if (isFirstByte) {
+      // SEEK_CUR specifies that offset provided is relative to current file position.
+      ::lseek(f.get(), n, SEEK_CUR);
+      if (::write(r.get(), data, 1) != 1) {
+        throw std::runtime_error("Write1 Failed");
+      }
+
+      count = n;
+    }
+
+    // After nth byte (now taking alternate nth byte).
+    else {
+      count = 2*n;
+      lseek(f.get(), count, SEEK_CUR);
+      if (::write(r.get(), data, 1) != 1) {
+        throw std::runtime_error("Write2 Failed");
+      }
+    }
   }
 
   // mark rollback as successful
   wrote_ok = true;
-  rollback.release();
-}
+  write_rollback.release();
 
-void read_record(std::vector<char> &data) {
-  // Open file with read-only mode and fail if file exists
-  int fd = ::open("/dev/null", O_RDONLY);
-  assert(fd >= 0);
-  assert(is_valid_fd(fd));
-
-  UniqueFd f(fd);
-  if (!f) {
-    throw std::runtime_error("Open Failed");
-  }
-
-  auto close_file = ScopeExit{[&] { ::close(f.get()); }};
-
-  // rollback guard for close(fd) covers all exits
-  bool read_ok = false;
-  auto rollback = ScopeExit{[&] {
-    if (!read_ok) {
-      ::unlink("/dev/null");
-    }
-  }};
-
-  // read record, should return 0 if success, throw if failed
-  if (::read(f.get(), data.data(), sizeof(data.size())) != 0) {
-    throw std::runtime_error("Read Failed");
-  }
   // mark rollback as successful
   read_ok = true;
-  rollback.release();
+  read_rollback.release();
 }
 
 void mainTest() {
@@ -96,22 +109,13 @@ void mainTest() {
   ::close(raw);
   assert(!is_valid_fd(fd2));
 
-  // test write_record
-  std::vector<char> records = {'H', 'e', 'l', 'l', 'o', '\n'};
-  try {
-    write_record(records);
-  } catch (const std::runtime_error &e) {
-    std::cerr << "Error: " << e.what() << '\n';
-    throw;
-  }
+  // std::vector<char> arr(100);
+  char arr[100];
+  int n;
+  n = 5;
 
-  // test read_record
-  try {
-    read_record(records);
-  } catch (const std::runtime_error &e) {
-    std::cerr << "Error: " << e.what() << '\n';
-    throw;
-  }
+  // Calling for the function
+  recordHandler(arr, n);
 }
 
 int main() {

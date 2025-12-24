@@ -17,6 +17,5 @@ static bool is_valid_fd(int fd) {
     return true;
   return errno != EBADF;
 }
-void write_record(); 
-void read_record();
+void recordHandler(); 
 void mainTest();
