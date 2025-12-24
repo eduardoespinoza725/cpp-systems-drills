@@ -1,14 +1,11 @@
 #pragma once
 
-#include "../src/ScopeExit.h"
-#include "../src/unique_fd.h"
-
 #include <cassert>
 #include <cerrno>
 #include <cstdio>  // for ::open
 #include <fcntl.h> // for ::fcntl
-#include <stdexcept>
-#include <vector>
+
+#include "../src/ScopeExit.h"
 
 static bool is_valid_fd(int fd) {
   errno = 0;

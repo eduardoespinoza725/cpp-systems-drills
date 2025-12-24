@@ -1,8 +1,8 @@
 #include <cstdio>
-#include <fcntl.h>
 #include <stdexcept>
 #include <unistd.h>
 
+#include "../src/unique_fd.h"
 #include "test_unique_fd.h"
 
 void recordHandler(char data[], const int n) {
