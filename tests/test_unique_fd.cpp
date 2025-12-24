@@ -5,16 +5,16 @@
 #include "../src/unique_fd.h"
 #include "test_unique_fd.h"
 
-void recordHandler(char data[], const int n) {
+void Tester::recordHandler(char data[], const int n) {
   // Open file with read-only mode and fail if file exists
   int write_fd = open("../tests/start.txt", O_RDONLY);
   assert(write_fd >= 0);
-  assert(is_valid_fd(write_fd));
+  assert(Tester::is_valid_fd(write_fd));
 
   // Open file with write-only mode and fail if file exists
   int read_fd = open("../tests/end.txt", O_WRONLY);
   assert(read_fd >= 0);
-  assert(is_valid_fd(read_fd));
+  assert(Tester::is_valid_fd(read_fd));
 
   UniqueFd f(write_fd);
   if (!f) {
@@ -78,10 +78,10 @@ void recordHandler(char data[], const int n) {
   read_rollback.release();
 }
 
-void mainTest() {
+void Tester::mainTest() {
   int fd1 = ::open("/dev/null", O_RDONLY);
   assert(fd1 >= 0);
-  assert(is_valid_fd(fd1));
+  assert(Tester::is_valid_fd(fd1));
 
   UniqueFd a(fd1); // a owns fd1
   assert(a.get() == fd1);
@@ -89,25 +89,25 @@ void mainTest() {
   UniqueFd b(std::move(a)); // b now owns fd1, a is empty
   assert(!a);
   assert(b.get() == fd1);
-  assert(is_valid_fd(b.get()));
+  assert(Tester::is_valid_fd(b.get()));
 
   int fd2 = ::open("/dev/null", O_RDONLY);
   assert(fd2 >= 0);
-  assert(is_valid_fd(fd2));
+  assert(Tester::is_valid_fd(fd2));
 
   // reset closes fd1 and takes fd2
   b.reset(fd2); // b now owns fd2, fd1 is closed
   assert(b.get() == fd2);
-  assert(is_valid_fd(fd2));
-  assert(!is_valid_fd(fd1)); // fd1 should be closed now
+  assert(Tester::is_valid_fd(fd2));
+  assert(!Tester::is_valid_fd(fd1)); // fd1 should be closed now
 
   // release detaches without closing
   int raw = b.release(); // raw owns fd2, b is empty
   assert(raw == fd2);
   assert(!b);
-  assert(is_valid_fd(raw));
+  assert(Tester::is_valid_fd(raw));
   ::close(raw);
-  assert(!is_valid_fd(fd2));
+  assert(!Tester::is_valid_fd(fd2));
 
   // std::vector<char> arr(100);
   char arr[100];
@@ -119,6 +119,6 @@ void mainTest() {
 }
 
 int main() {
-  mainTest();
+  Tester::mainTest();
   return 0;
 }
