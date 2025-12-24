@@ -27,9 +27,6 @@ void Tester::recordHandler(char data[], const int n) {
     throw std::runtime_error("Open Failed");
   }
 
-  auto close_file = ScopeExit{[&] { ::close(f.get()); }};
-  auto close_record = ScopeExit{[&] { ::close(r.get()); }};
-
   // rollback guard for close(fd) covers all exits
   bool wrote_ok = false;
   auto write_rollback = ScopeExit{[&] {
@@ -91,8 +88,6 @@ void Tester::restoreTempStateTest(Flags &flags) {
 
   // Calling for the function
   recordHandler(arr, n);
-
-  restore.release();
 }
 
 void Tester::correctOrdering() {
