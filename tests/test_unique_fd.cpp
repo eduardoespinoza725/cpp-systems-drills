@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <iostream>
 #include <stdexcept>
 #include <unistd.h>
 
@@ -33,14 +34,14 @@ void Tester::recordHandler(char data[], const int n) {
   bool wrote_ok = false;
   auto write_rollback = ScopeExit{[&] {
     if (!wrote_ok) {
-      ::unlink("/home/lalo/cpp-systems-drills/tests/start.txt");
+      ::unlink("../tests/start.txt");
     }
   }};
 
   bool read_ok = false;
   auto read_rollback = ScopeExit{[&] {
     if (!read_ok) {
-      ::unlink("/home/lalo/cpp-systems-drills/tests/end.txt");
+      ::unlink("../tests/end.txt");
     }
   }};
 
@@ -76,6 +77,27 @@ void Tester::recordHandler(char data[], const int n) {
   // mark rollback as successful
   read_ok = true;
   read_rollback.release();
+}
+
+void Tester::restoreTempStateTest(Flags &flags) {
+  int old = flags.value;
+  auto restore = ScopeExit{[&] { flags.value = old; }};
+
+  flags.value |= 0x4; // temporarily enable something
+  // create operations that may throw or early-return
+  char arr[100];
+  int n;
+  n = 5;
+
+  // Calling for the function
+  recordHandler(arr, n);
+
+  restore.release();
+}
+
+void Tester::correctOrdering() {
+  auto a = ScopeExit{[] { std::cout << "a"; }};
+  auto b = ScopeExit{[] { std::cout << "b"; }};
 }
 
 void Tester::mainTest() {
@@ -119,6 +141,13 @@ void Tester::mainTest() {
 }
 
 int main() {
-  Tester::mainTest();
+  Tester::Flags flg{.value = 1};
+  try {
+    Tester::mainTest();
+    Tester::restoreTempStateTest(flg);
+    Tester::correctOrdering();
+  } catch (...) {
+    throw std::runtime_error("Failed");
+  }
   return 0;
 }

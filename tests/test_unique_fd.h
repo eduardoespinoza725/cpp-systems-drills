@@ -17,6 +17,10 @@ public:
     return errno != EBADF;
   }
 
-  static void recordHandler(char data[], const int n);
+  struct Flags { int value; };
+
   static void mainTest();
+  static void recordHandler(char data[], const int n);
+  static void restoreTempStateTest(Flags& flags);
+  static void correctOrdering();
 };
