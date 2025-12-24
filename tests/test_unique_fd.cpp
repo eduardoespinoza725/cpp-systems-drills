@@ -7,12 +7,12 @@
 
 void recordHandler(char data[], const int n) {
   // Open file with read-only mode and fail if file exists
-  int write_fd = open("/home/lalo/cpp-systems-drills/tests/start.txt", O_RDONLY);
+  int write_fd = open("../tests/start.txt", O_RDONLY);
   assert(write_fd >= 0);
   assert(is_valid_fd(write_fd));
 
   // Open file with write-only mode and fail if file exists
-  int read_fd = open("/home/lalo/cpp-systems-drills/tests/end.txt", O_WRONLY);
+  int read_fd = open("../tests/end.txt", O_WRONLY);
   assert(read_fd >= 0);
   assert(is_valid_fd(read_fd));
 
