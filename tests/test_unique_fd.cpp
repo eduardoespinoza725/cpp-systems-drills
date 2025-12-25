@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <fcntl.h>
 #include <iostream>
 #include <stdexcept>
 #include <unistd.h>
@@ -7,73 +8,56 @@
 #include "test_unique_fd.h"
 
 void Tester::recordHandler(char data[], const int n) {
-  // Open file with read-only mode and fail if file exists
-  int write_fd = open("../tests/start.txt", O_RDONLY);
-  assert(write_fd >= 0);
-  assert(Tester::is_valid_fd(write_fd));
-
-  // Open file with write-only mode and fail if file exists
-  int read_fd = open("../tests/end.txt", O_WRONLY);
-  assert(read_fd >= 0);
-  assert(Tester::is_valid_fd(read_fd));
-
-  UniqueFd f(write_fd);
-  if (!f) {
-    throw std::runtime_error("Open Failed");
+  // Open file with read-only mode
+  UniqueFd in(::open("../tests/start.txt", O_RDONLY));
+  if (!in) {
+    throw std::runtime_error("Open start.txt failed");
   }
 
-  UniqueFd r(read_fd);
-  if (!r) {
-    throw std::runtime_error("Open Failed");
+  const char *out_path = "../tests/end.txt";
+
+  // Open file with write-only mode and overwrite/truncate if exists
+  UniqueFd out(::open(out_path, O_WRONLY | O_CREAT | O_TRUNC, 0644));
+  if (!out) {
+    throw std::runtime_error("Open end.txt failed");
   }
 
-  // rollback guard for close(fd) covers all exits
-  bool wrote_ok = false;
-  auto write_rollback = ScopeExit{[&] {
-    if (!wrote_ok) {
-      ::unlink("../tests/start.txt");
-    }
-  }};
+  // rollback guard. Rollback output file unless we commit
+  auto rollback = ScopeExit{[&] { ::unlink(out_path); }};
 
-  bool read_ok = false;
-  auto read_rollback = ScopeExit{[&] {
-    if (!read_ok) {
-      ::unlink("../tests/end.txt");
-    }
-  }};
-
-  // write record, throw if failed
   int count = 0;
-  while (::read(f.get(), data, 1) != 0) {
-    // to write the 1st byte of the input file in the output file
+  // I/O loop: must distinguish EOF (0) from error (-1)
+  for (;;) {
+    const ssize_t rd = ::read(in.get(), data, 1); 
+    if(rd == 0) break;
+    if (rd < 0) throw std::runtime_error("Read failed");
+
+    // to write the 1st byte of the input file in the output file bool
     bool isFirstByte = count < n;
     if (isFirstByte) {
       // SEEK_CUR specifies that offset provided is relative to current file position.
-      ::lseek(f.get(), n, SEEK_CUR);
-      if (::write(r.get(), data, 1) != 1) {
-        throw std::runtime_error("Write1 Failed");
+      if (::lseek(in.get(), n, SEEK_CUR) == -1) {
+        throw std::runtime_error("Lseek failed");
+      }
+      if (::write(out.get(), data, 1) != 1) {
+        throw std::runtime_error("Write failed");
       }
 
       count = n;
-    }
-
-    // After nth byte (now taking alternate nth byte).
-    else {
+    } else {
+      // After nth byte (now taking alternate nth byte).  
       count = 2*n;
-      lseek(f.get(), count, SEEK_CUR);
-      if (::write(r.get(), data, 1) != 1) {
-        throw std::runtime_error("Write2 Failed");
+      if (::lseek(in.get(), count, SEEK_CUR) == -1) {
+        throw std::runtime_error("Lseek failed");
+      }
+      if (::write(out.get(), data, 1) != 1) {
+        throw std::runtime_error("Write failed");
       }
     }
   }
 
-  // mark rollback as successful
-  wrote_ok = true;
-  write_rollback.release();
-
-  // mark rollback as successful
-  read_ok = true;
-  read_rollback.release();
+  // Commit: Keep output file
+  rollback.release();
 }
 
 void Tester::restoreTempStateTest(Flags &flags) {
@@ -88,11 +72,13 @@ void Tester::restoreTempStateTest(Flags &flags) {
 
   // Calling for the function
   recordHandler(arr, n);
+
+  // DO NOT release; restoration is the point.
 }
 
 void Tester::correctOrdering() {
-  auto a = ScopeExit{[] { std::cout << "a"; }};
-  auto b = ScopeExit{[] { std::cout << "b"; }};
+  auto a = ScopeExit{[] { std::cout << "a" << std::endl; }};
+  auto b = ScopeExit{[] { std::cout << "b" << std::endl; }};
 }
 
 void Tester::mainTest() {
@@ -137,12 +123,9 @@ void Tester::mainTest() {
 
 int main() {
   Tester::Flags flg{.value = 1};
-  try {
-    Tester::mainTest();
-    Tester::restoreTempStateTest(flg);
-    Tester::correctOrdering();
-  } catch (...) {
-    throw std::runtime_error("Failed");
-  }
+  Tester::mainTest();
+  Tester::restoreTempStateTest(flg);
+  Tester::correctOrdering();
+  
   return 0;
 }
